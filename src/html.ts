@@ -2,6 +2,8 @@ import render from "dom-serializer";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 import { parseDocument } from "htmlparser2";
 
+import { isWattpadHttpsUrl } from "./wattpad/urls.ts";
+
 const ALLOWED_TAGS = new Set([
   "p",
   "br",
@@ -51,17 +53,7 @@ const DISCARDED_TAGS = new Set([
   "template",
 ]);
 
-export const isWattpadImageUrl = (url: string) => {
-  try {
-    const { protocol, hostname } = new URL(url);
-    return (
-      (protocol === "https:" || protocol === "http:") &&
-      (hostname === "wattpad.com" || hostname.endsWith(".wattpad.com"))
-    );
-  } catch {
-    return false;
-  }
-};
+export const isWattpadImageUrl = isWattpadHttpsUrl;
 
 const isWebUrl = (url: string) => /^https?:\/\//i.test(url);
 
@@ -111,16 +103,20 @@ export const extractImageUrls = (html: string): ReadonlyArray<string> => {
 
 /** Well-formed XHTML for one chapter body; `images` maps a source URL to its path in the EPUB. */
 export const toXhtml = (html: string, images: ReadonlyMap<string, string>): string =>
-  render(
-    sanitize(parseBody(html), (src) => images.get(src)),
-    {
-      xmlMode: true,
-      encodeEntities: "utf8",
-    },
+  stripInvalidXml(
+    render(
+      sanitize(parseBody(html), (src) => images.get(src)),
+      { xmlMode: true, encodeEntities: "utf8" },
+    ),
   );
 
+/** Characters XML 1.0 forbids, including lone surrogates. One of them makes the whole document unreadable. */
+const INVALID_XML_CHARS = /[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
+
+export const stripInvalidXml = (text: string) => text.replace(INVALID_XML_CHARS, "");
+
 export const escapeXml = (text: string) =>
-  text
+  stripInvalidXml(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

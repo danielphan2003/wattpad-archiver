@@ -6,6 +6,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Random from "effect/Random";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { buildEpub, type EpubChapter, type EpubImage, imageExtension } from "./epub.ts";
@@ -86,20 +88,29 @@ export const stateOf = (story: LibraryStory, saved: Manifest.Entry | undefined):
 };
 
 const UNSAFE_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001f]/gu;
-const MAX_TITLE_CODE_POINTS = 80;
+/** A file name is at most 255 bytes. 150 for the title leaves room for ` [<id>].epub` and a temporary suffix. */
+const MAX_TITLE_BYTES = 150;
 
-/** `<title> [<id>].epub`: readable, unique across stories that share a title, stable across renames of nothing but the title. */
+const truncateToBytes = (text: string, limit: number) => {
+  const encoder = new TextEncoder();
+  let kept = "";
+  let size = 0;
+  for (const character of text) {
+    size += encoder.encode(character).length;
+    if (size > limit) break;
+    kept += character;
+  }
+  return kept;
+};
+
+/** `<title> [<id>].epub`: readable, and unique across stories that share a title. Ids are digits, so the name has no separators. */
 export const fileNameFor = (story: { readonly id: string; readonly title: string }) => {
-  const title = [
-    ...story.title
-      .normalize("NFC")
-      .replace(UNSAFE_FILENAME_CHARS, " ")
-      .replace(/\s+/gu, " ")
-      .trim(),
-  ]
-    .slice(0, MAX_TITLE_CODE_POINTS)
-    .join("")
+  const cleaned = story.title
+    .normalize("NFC")
+    .replace(UNSAFE_FILENAME_CHARS, " ")
+    .replace(/\s+/gu, " ")
     .trim();
+  const title = truncateToBytes(cleaned, MAX_TITLE_BYTES).trim();
   return `${title.length === 0 ? "Untitled" : title} [${story.id}].epub`;
 };
 
@@ -201,9 +212,11 @@ export const layer = Layer.effect(
       target: string,
       bytes: Uint8Array,
     ) {
-      const partial = `${target}.part`;
+      // A name no other run shares, so two processes archiving one story cannot trample a temporary file.
+      const partial = `${target}.${(yield* Random.nextInt).toString(36)}.part`;
       yield* fileSystem.writeFile(partial, bytes).pipe(
         Effect.andThen(fileSystem.rename(partial, target)),
+        Effect.onError(() => fileSystem.remove(partial, { force: true }).pipe(Effect.ignore)),
         Effect.mapError(
           (cause) => new ArchiveWriteError({ operation: "write", path: target, cause }),
         ),
@@ -248,7 +261,10 @@ export const layer = Layer.effect(
           photoPath: photo,
         };
       });
-      const failedParts = chapters.filter((chapter) => chapter.body === undefined).length;
+      // A story that lists more chapters than it returned is incomplete, not finished.
+      const missingParts = Math.max(0, story.numParts - story.parts.length);
+      const failedParts =
+        chapters.filter((chapter) => chapter.body === undefined).length + missingParts;
       const coverExtension = Option.isSome(cover)
         ? imageExtension(cover.value.mediaType)
         : undefined;
@@ -357,7 +373,15 @@ export const layer = Layer.effect(
       } satisfies Summary;
     });
 
-    return Service.of({ status: status(), archive });
+    // One run at a time: two overlapping runs would rebuild the same stories and double the load on Wattpad.
+    const runLock = yield* Semaphore.make(1);
+
+    return Service.of({
+      status: status(),
+      archive: Effect.fn("Archiver.archiveExclusive")(function* (options, onEvent) {
+        return yield* runLock.withPermits(1)(archive(options, onEvent));
+      }),
+    });
   }),
 );
 

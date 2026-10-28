@@ -2,3 +2,7 @@ node_modules
 dist
 *.tsbuildinfo
 scratch
+# Default CLI output and its state log: private library data, never commit it.
+wattpad-archive/
+.wattpad-archiver/
+*.epub

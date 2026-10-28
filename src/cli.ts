@@ -4,11 +4,12 @@ import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
 import * as Archiver from "./Archiver.ts";
-import { statusLine, summaryLines, toJson } from "./format.ts";
+import { printable, statusLine, summaryLines, toJson } from "./format.ts";
 import { DEFAULT_REQUESTS_PER_SECOND } from "./http.ts";
 import * as Mcp from "./mcp.ts";
 import * as Runtime from "./runtime.ts";
@@ -16,6 +17,9 @@ import packageJson from "../package.json" with { type: "json" };
 
 const userError = (error: { readonly message: string }) =>
   new CliError.UserError({ cause: error.message });
+
+const between = (minimum: number, maximum: number) =>
+  Schema.Int.check(Schema.isBetween({ minimum, maximum }));
 
 const sharedFlags = {
   username: Flag.String("username").pipe(
@@ -38,19 +42,23 @@ const sharedFlags = {
     Flag.withDefault("./wattpad-archive"),
   ),
   rate: Flag.Int("rate").pipe(
-    Flag.withDescription("Requests per second sent to Wattpad. Slows itself down on 429."),
+    Flag.withSchema(between(1, 100)),
+    Flag.withDescription("Requests per second sent to Wattpad (1-100). Slows itself down on 429."),
     Flag.withDefault(DEFAULT_REQUESTS_PER_SECOND),
   ),
   retries: Flag.Int("retries").pipe(
-    Flag.withDescription("Retries per request for timeouts, 429, and 5xx."),
+    Flag.withSchema(between(0, 20)),
+    Flag.withDescription("Retries per request for timeouts, 429, and 5xx (0-20)."),
     Flag.withDefault(5),
   ),
   storyConcurrency: Flag.Int("story-concurrency").pipe(
-    Flag.withDescription("Stories built at the same time."),
+    Flag.withSchema(between(1, 16)),
+    Flag.withDescription("Stories built at the same time (1-16)."),
     Flag.withDefault(4),
   ),
   chapterConcurrency: Flag.Int("chapter-concurrency").pipe(
-    Flag.withDescription("Chapters fetched at the same time within one story."),
+    Flag.withSchema(between(1, 32)),
+    Flag.withDescription("Chapters fetched at the same time within one story (1-32)."),
     Flag.withDefault(8),
   ),
 };
@@ -77,6 +85,7 @@ const archiveCommand = Command.make("archive", {
     Flag.atLeast(0),
   ),
   maxStories: Flag.Int("max-stories").pipe(
+    Flag.withSchema(between(1, 100_000)),
     Flag.withDescription("Stop after this many stories that need archiving."),
     Flag.optional,
   ),
@@ -114,9 +123,10 @@ const archiveCommand = Command.make("archive", {
                   Console.error(`${pending} of ${total} stories to archive`),
                 StoryArchived: ({ title, parts, failedParts, failedImages }) =>
                   Console.error(
-                    `archived ${title} (${parts} chapters${failedParts > 0 ? `, ${failedParts} missing` : ""}${failedImages > 0 ? `, ${failedImages} images missing` : ""})`,
+                    `archived ${printable(title)} (${parts} chapters${failedParts > 0 ? `, ${failedParts} missing` : ""}${failedImages > 0 ? `, ${failedImages} images missing` : ""})`,
                   ),
-                StoryFailed: ({ title, message }) => Console.error(`failed ${title}: ${message}`),
+                StoryFailed: ({ title, message }) =>
+                  Console.error(`failed ${printable(title)}: ${printable(message)}`),
               })
             : Effect.void,
       );

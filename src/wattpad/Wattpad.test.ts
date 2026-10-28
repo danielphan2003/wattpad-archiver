@@ -1,10 +1,20 @@
 import { describe, expect, it } from "@effect/vitest";
+import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
-import type { HttpClientRequest } from "effect/http";
+import { HttpClientError, HttpClientRequest } from "effect/http";
+import { TestClock } from "effect/testing";
 
-import { fakeHttp, type Handler, json, testCredentials, text } from "../http.testkit.ts";
+import * as Http from "../http.ts";
+import {
+  fakeHttp,
+  type Handler,
+  json,
+  TEST_TOKEN,
+  testCredentials,
+  text,
+} from "../http.testkit.ts";
 import type { Part } from "./schema.ts";
 import * as Wattpad from "./Wattpad.ts";
 
@@ -28,6 +38,8 @@ const part = (id: number): Part => ({
   text_url: { text: `https://www.wattpad.com/apiv2/?m=storytext&id=${id}&page=` },
 });
 
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
+
 const NEXT_PAGE = "https://www.wattpad.com/api/v3/users/reader/library?cursor=two";
 
 describe("Wattpad.library", () => {
@@ -42,13 +54,13 @@ describe("Wattpad.library", () => {
         provide(
           (request) =>
             request.url.includes("cursor=two")
-              ? json({ stories: [libraryStory("c")] })
-              : json({ stories: [libraryStory("a"), libraryStory("b")], nextUrl: NEXT_PAGE }),
+              ? json({ stories: [libraryStory("3")] })
+              : json({ stories: [libraryStory("1"), libraryStory("2")], nextUrl: NEXT_PAGE }),
           seen,
         ),
       );
 
-      expect(ids).toEqual(["a", "b", "c"]);
+      expect(ids).toEqual(["1", "2", "3"]);
       expect(seen.map((request) => request.url)).toHaveLength(2);
       const first = new URL(seen[0]!.url);
       expect(first.pathname).toBe("/api/v3/users/reader/library");
@@ -64,7 +76,7 @@ describe("Wattpad.library", () => {
         return yield* wattpad.library.pipe(Stream.runCollect, Effect.flip);
       }).pipe(
         provide(
-          () => json({ stories: [libraryStory("a")], nextUrl: "https://evil.example/steal" }),
+          () => json({ stories: [libraryStory("1")], nextUrl: "https://evil.example/steal" }),
           seen,
         ),
       );
@@ -90,6 +102,12 @@ describe("Wattpad failures", () => {
     {
       name: "a server error",
       response: () => text("upstream exploded", 502),
+      tag: "WattpadRequestError",
+    },
+    {
+      name: "a redirect, which is not content",
+      response: () =>
+        new Response("", { status: 302, headers: { location: "https://evil.example/" } }),
       tag: "WattpadRequestError",
     },
     {
@@ -137,7 +155,7 @@ describe("Wattpad.image", () => {
             request.url.endsWith("private.png") && request.headers.cookie === undefined;
           return needsToken
             ? new Response("forbidden", { status: 403 })
-            : new Response(new Uint8Array([1]), { headers: { "content-type": "image/png" } });
+            : new Response(PNG, { headers: { "content-type": "image/png" } });
         }, seen),
       );
 
@@ -175,13 +193,163 @@ describe("Wattpad.image", () => {
             attempts += 1;
             return attempts === 1
               ? new Response("nope", { status: 404 })
-              : new Response(new Uint8Array([1, 2]), { headers: { "content-type": "image/png" } });
+              : new Response(PNG, { headers: { "content-type": "image/png" } });
           }
-          return new Response(new Uint8Array([1, 2, 3]), {
+          return new Response(PNG, {
             headers: { "content-type": "image/png" },
           });
         }, seen),
       );
     }),
+  );
+});
+
+describe("Wattpad guards", () => {
+  it.effect("rejects an id that is not digits before it can reach a URL or a file name", () =>
+    Effect.gen(function* () {
+      const wattpad = yield* Wattpad.Service;
+      const listed = yield* wattpad.library.pipe(Stream.runCollect, Effect.flip);
+      const named = yield* wattpad.story("../../etc").pipe(Effect.flip);
+
+      expect(listed._tag).toBe("WattpadResponseError");
+      expect(named._tag).toBe("WattpadNotFoundError");
+    }).pipe(provide(() => json({ stories: [libraryStory("../../x")] }))),
+  );
+
+  it.effect("stops a library whose pages never end", () =>
+    Effect.gen(function* () {
+      const seen: Array<HttpClientRequest.HttpClientRequest> = [];
+      const error = yield* Effect.gen(function* () {
+        const wattpad = yield* Wattpad.Service;
+        return yield* wattpad.library.pipe(Stream.runCollect, Effect.flip);
+      }).pipe(provide(() => json({ stories: [libraryStory("1")], nextUrl: NEXT_PAGE }), seen));
+
+      expect(error._tag).toBe("WattpadResponseError");
+      expect(seen).toHaveLength(2);
+    }),
+  );
+
+  it.effect.each([
+    { name: "an http URL", url: "http://www.wattpad.com/apiv2/?id=1" },
+    { name: "a local address", url: "https://127.0.0.1/apiv2/?id=1" },
+    { name: "another host", url: "https://evil.example/apiv2/?id=1" },
+  ])("never requests a chapter at $name", ({ url }) =>
+    Effect.gen(function* () {
+      const seen: Array<HttpClientRequest.HttpClientRequest> = [];
+      const error = yield* Effect.gen(function* () {
+        const wattpad = yield* Wattpad.Service;
+        return yield* wattpad.chapter({ ...part(7), text_url: { text: url } }).pipe(Effect.flip);
+      }).pipe(provide(() => text("<p>x</p>"), seen));
+
+      expect(error._tag).toBe("WattpadResponseError");
+      expect(seen).toHaveLength(0);
+    }),
+  );
+
+  it.effect.each([
+    {
+      name: "HTML labelled as an image",
+      url: "https://img.wattpad.com/a.png",
+      response: () =>
+        new Response("<html>login</html>", { headers: { "content-type": "image/png" } }),
+      requests: 1,
+    },
+    {
+      name: "an http image URL",
+      url: "http://img.wattpad.com/a.png",
+      response: () => new Response(PNG, { headers: { "content-type": "image/png" } }),
+      requests: 0,
+    },
+    {
+      name: "an image URL on another host",
+      url: "https://evil.example/a.png",
+      response: () => new Response(PNG, { headers: { "content-type": "image/png" } }),
+      requests: 0,
+    },
+  ])("rejects $name", ({ url, response, requests }) =>
+    Effect.gen(function* () {
+      const seen: Array<HttpClientRequest.HttpClientRequest> = [];
+      const error = yield* Effect.gen(function* () {
+        const wattpad = yield* Wattpad.Service;
+        return yield* wattpad.image(url).pipe(Effect.flip);
+      }).pipe(provide(response, seen));
+
+      expect(error._tag).toBe("WattpadResponseError");
+      expect(seen).toHaveLength(requests);
+    }),
+  );
+
+  it.effect.each([
+    {
+      name: "a body that declares more than the limit",
+      response: () => new Response("x", { headers: { "content-length": String(9 * 1024 * 1024) } }),
+    },
+    {
+      name: "a body that streams past the limit",
+      response: () => new Response(new Uint8Array(8 * 1024 * 1024 + 1)),
+    },
+  ])("rejects a chapter with $name", ({ response }) =>
+    Effect.gen(function* () {
+      const wattpad = yield* Wattpad.Service;
+      const error = yield* wattpad.chapter(part(7)).pipe(Effect.flip);
+      expect(error._tag).toBe("WattpadResponseError");
+      expect(error.message).toContain("unreadable");
+    }).pipe(provide(response)),
+  );
+
+  it.effect("gives up on a request that never answers", () =>
+    Effect.gen(function* () {
+      const wattpad = yield* Wattpad.Service;
+      const fiber = yield* wattpad.chapter(part(7)).pipe(Effect.flip, Effect.forkChild);
+      yield* TestClock.adjust("2 minutes");
+      const error = yield* Fiber.join(fiber);
+      expect(error._tag).toBe("WattpadResponseError");
+    }).pipe(
+      Effect.provide(
+        Wattpad.layer.pipe(
+          Layer.provide(
+            Layer.succeed(Http.Service, {
+              execute: () => Effect.never,
+              executeAuthenticated: () => Effect.never,
+            }),
+          ),
+          Layer.provide(testCredentials),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("keeps the token out of the cause of a transport failure", () =>
+    Effect.gen(function* () {
+      const wattpad = yield* Wattpad.Service;
+      const error = yield* wattpad.story("1").pipe(Effect.flip);
+
+      expect(error).toMatchObject({ _tag: "WattpadResponseError", cause: expect.any(String) });
+      expect(JSON.stringify(error)).not.toContain(TEST_TOKEN);
+    }).pipe(
+      Effect.provide(
+        Wattpad.layer.pipe(
+          Layer.provide(
+            Layer.succeed(Http.Service, {
+              execute: (request) =>
+                Effect.fail(
+                  new HttpClientError.HttpClientError({
+                    reason: new HttpClientError.TransportError({
+                      request: HttpClientRequest.setHeader(
+                        request,
+                        "cookie",
+                        `token=${TEST_TOKEN}`,
+                      ),
+                      cause: new Error("socket hang up"),
+                    }),
+                  }),
+                ),
+              executeAuthenticated: () => Effect.never,
+            }),
+          ),
+          Layer.provide(testCredentials),
+        ),
+      ),
+    ),
   );
 });

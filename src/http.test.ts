@@ -25,10 +25,12 @@ describe("Http", () => {
         yield* http.execute(HttpClientRequest.get("https://www.wattpad.com/api/v3/stories/1"));
         yield* http.execute(HttpClientRequest.get("https://img.wattpad.com/cover/1.jpg"));
         yield* http.execute(HttpClientRequest.get("https://evil.example/pixel.png"));
+        yield* http.execute(HttpClientRequest.get("http://www.wattpad.com/api/v3/stories/1"));
       }).pipe(run(() => new Response("ok"), seen));
 
       expect(seen.map((request) => request.headers.cookie)).toEqual([
         `token=${TEST_TOKEN}`,
+        undefined,
         undefined,
         undefined,
       ]);
@@ -45,10 +47,12 @@ describe("Http", () => {
           HttpClientRequest.get("https://wattpad.com.evil.example/a.jpg"),
         );
         yield* http.executeAuthenticated(HttpClientRequest.get("https://evil.example/a.jpg"));
+        yield* http.executeAuthenticated(HttpClientRequest.get("http://img.wattpad.com/a.jpg"));
       }).pipe(run(() => new Response("ok"), seen));
 
       expect(seen.map((request) => request.headers.cookie)).toEqual([
         `token=${TEST_TOKEN}`,
+        undefined,
         undefined,
         undefined,
       ]);

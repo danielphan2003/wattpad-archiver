@@ -40,7 +40,7 @@ describe("Manifest", () => {
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("skips a line cut short by a crash and keeps the records around it", () =>
+  it.effect("skips a line cut short by a crash and still records what comes after it", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -50,11 +50,17 @@ describe("Manifest", () => {
         yield* manifest.record(entry("1"));
       }).pipe(Effect.provide(Manifest.layer(directory)));
 
+      // The process died mid-write: a fragment with no newline after it.
       const log = path.join(directory, ".wattpad-archiver", "state.jsonl");
       yield* fileSystem.writeFileString(log, '{"id":"2","modifyDa', { flag: "a" });
-      yield* fileSystem.writeFileString(log, "\n", { flag: "a" });
 
-      expect([...(yield* load(directory)).keys()]).toEqual(["1"]);
+      yield* Effect.gen(function* () {
+        const manifest = yield* Manifest.Service;
+        expect([...(yield* manifest.entries).keys()]).toEqual(["1"]);
+        yield* manifest.record(entry("3"));
+      }).pipe(Effect.provide(Manifest.layer(directory)));
+
+      expect([...(yield* load(directory)).keys()]).toEqual(["1", "3"]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

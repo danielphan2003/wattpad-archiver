@@ -14,6 +14,7 @@ import {
 import { RateLimiter } from "effect/persistence";
 
 import * as Credentials from "./Credentials.ts";
+import { isWattpadHttpsUrl } from "./wattpad/urls.ts";
 
 export const WATTPAD_HOST = "www.wattpad.com";
 export const DEFAULT_REQUESTS_PER_SECOND = 15;
@@ -43,22 +44,25 @@ export interface Options {
   readonly maxRetries: number;
 }
 
-const hostOf = (url: string) => {
+const parsed = (url: string) => {
   try {
-    return new URL(url).hostname;
+    return new URL(url);
   } catch {
     return undefined;
   }
 };
 
-const isWattpadHost = (host: string | undefined) =>
-  host !== undefined && (host === "wattpad.com" || host.endsWith(".wattpad.com"));
+/** The token goes to `www.wattpad.com` over https, and nowhere else. */
+const isApiUrl = (url: string) => {
+  const target = parsed(url);
+  return target?.protocol === "https:" && target.hostname === WATTPAD_HOST;
+};
 
 /**
  * Paces requests with a token bucket that backs off on `429`, retries transient failures,
- * and sends the token cookie to `www.wattpad.com` only. Other `wattpad.com` hosts, such as the
- * image CDN, get it only through `executeAuthenticated`, which callers use after the host refuses
- * a request without it. Hosts outside `wattpad.com` never get it.
+ * and sends the token cookie to `https://www.wattpad.com` only. Other `https` `wattpad.com` hosts, such as
+ * the image CDN, get it only through `executeAuthenticated`, which callers use after the host refuses
+ * a request without it. Plain `http` and hosts outside `wattpad.com` never get it.
  */
 export const make = Effect.fn("Http.make")(function* (options: Options) {
   const client = yield* HttpClient.HttpClient;
@@ -67,10 +71,10 @@ export const make = Effect.fn("Http.make")(function* (options: Options) {
   const cookie = `token=${Redacted.value(credentials.token)}`;
 
   // Both clients share one limiter key, so the budget is one request budget, not two.
-  const limit = (sendsToken: (host: string | undefined) => boolean) =>
+  const limit = (sendsToken: (url: string) => boolean) =>
     client.pipe(
       HttpClient.mapRequest((request) =>
-        sendsToken(hostOf(request.url))
+        sendsToken(request.url)
           ? request.pipe(
               HttpClientRequest.setHeader("cookie", cookie),
               HttpClientRequest.setHeader("user-agent", USER_AGENT),
@@ -91,8 +95,8 @@ export const make = Effect.fn("Http.make")(function* (options: Options) {
       }),
     );
 
-  const scoped = limit((host) => host === WATTPAD_HOST);
-  const authenticated = limit(isWattpadHost);
+  const scoped = limit(isApiUrl);
+  const authenticated = limit(isWattpadHttpsUrl);
   return Service.of({ execute: scoped.execute, executeAuthenticated: authenticated.execute });
 });
 

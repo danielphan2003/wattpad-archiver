@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
-export const StoryId = Schema.String;
+/** Story ids are decimal digits; anything else is rejected before it can reach a URL or a file name. */
+export const StoryId = Schema.String.check(Schema.isPattern(/^\d{1,20}$/));
 
 export const LibraryStory = Schema.Struct({
   id: StoryId,

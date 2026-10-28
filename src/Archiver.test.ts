@@ -170,6 +170,27 @@ describe("Archiver", () => {
     );
   });
 
+  it.effect("treats a story that returns fewer chapters than it lists as incomplete", () => {
+    const fake = makeFake(makeStory("1", { parts: [makePart(11), makePart(12)], numParts: 3 }));
+    return inArchive(fake, () =>
+      Effect.gen(function* () {
+        expect(yield* archive()).toMatchObject({ archived: 1, partial: 1, failedParts: 1 });
+        expect(yield* archive()).toMatchObject({ archived: 1, partial: 1 });
+      }),
+    );
+  });
+
+  it.effect("runs overlapping archive calls one after the other, so a story is built once", () => {
+    const fake = makeFake(makeStory("1"));
+    return inArchive(fake, () =>
+      Effect.gen(function* () {
+        const [first, second] = yield* Effect.all([archive(), archive()], { concurrency: 2 });
+        expect(first.archived + second.archived).toBe(1);
+        expect(fake.calls.story).toBe(1);
+      }),
+    );
+  });
+
   it.effect("skips drafts and deleted chapters", () => {
     const fake = makeFake(
       makeStory("1", {
@@ -215,5 +236,22 @@ describe("Archiver", () => {
         expect(rest).toMatchObject({ archived: 1, skipped: 2 });
       }),
     );
+  });
+});
+
+describe("fileNameFor", () => {
+  it.each([
+    { title: "a/b:c*d?", name: "a b c d [1].epub" },
+    { title: "   ", name: "Untitled [1].epub" },
+    { title: "../../etc/passwd", name: ".. .. etc passwd [1].epub" },
+  ])("turns $title into a single safe file name", ({ title, name }) => {
+    expect(Archiver.fileNameFor({ id: "1", title })).toBe(name);
+  });
+
+  it("keeps the name under the filesystem limit when the title is long, wide, or both", () => {
+    const longest = Archiver.fileNameFor({ id: "9".repeat(20), title: "😀".repeat(200) });
+    // 255 bytes, minus a temporary suffix of about 14.
+    expect(new TextEncoder().encode(longest).length).toBeLessThanOrEqual(240);
+    expect(longest.endsWith("].epub")).toBe(true);
   });
 });

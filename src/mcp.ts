@@ -81,7 +81,8 @@ export const ArchiveTool = Tool.make("wattpad_archive", {
 })
   .annotate(Tool.Title, "Archive Wattpad stories as EPUBs")
   .annotate(Tool.Readonly, false)
-  .annotate(Tool.Destructive, false)
+  // A rebuilt story replaces its EPUB, and a retitled one deletes the file under its old name.
+  .annotate(Tool.Destructive, true)
   .annotate(Tool.Idempotent, true);
 
 export const WattpadToolkit = Toolkit.make(LibraryTool, ArchiveTool);

@@ -44,11 +44,15 @@ wattpad-archiver archive                   # everything that is new or changed
 wattpad-archiver archive --story 398322420 # one story, without walking the library
 ```
 
-`archive` prints one summary line and nothing else, and mentions any images it could not download. `--verbose` adds a line per story, `--json` prints the
+`archive` prints one summary line, plus one line per story that failed, and mentions any images it could not
+download. Nothing else is printed unless you pass `--verbose`. `--verbose` adds a line per story, `--json` prints the
 summary as JSON. It exits non-zero when a story fails.
 
 A full first run is about one request per chapter plus the images, so tens of thousands for a large library.
 The tool paces itself (`--rate`, default 15 requests per second) and slows down when Wattpad answers `429`.
+
+Keep the output directory outside any git repository: it holds your library's contents. The default
+`./wattpad-archive` is ignored by this repository's `.gitignore` in case you run it from here.
 
 ## Incremental runs
 

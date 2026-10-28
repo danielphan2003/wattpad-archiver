@@ -60,6 +60,7 @@ describe("images", () => {
   it.each([
     ["https://img.wattpad.com/a.jpg", true],
     ["https://wattpad.com/a.jpg", true],
+    ["http://img.wattpad.com/a.jpg", false],
     ["https://wattpad.com.evil.example/a.jpg", false],
     ["https://notwattpad.com/a.jpg", false],
     ["data:image/png;base64,AAAA", false],

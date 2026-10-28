@@ -88,7 +88,9 @@ describe("buildEpub", () => {
 
   it("passes EPUBCheck without errors or warnings, with images, a dedication, and a missing chapter", async () => {
     const story = makeStory("5", {
-      title: 'A & B <"C">',
+      title: 'A & B <"C">\u0001',
+      description: "Line one\u0000\nline two",
+      tags: ["tag\u0008one"],
       language: { id: 19, name: "Tiếng Việt" },
       parts: [
         makePart(51, { dedication: { name: "Ada", url: "https://www.wattpad.com/user/ada" } }),
@@ -97,7 +99,7 @@ describe("buildEpub", () => {
       ],
     });
     const body = toXhtml(
-      '<p>Xin chào&nbsp;thế giới<br>dòng hai</p><img src="https://img.wattpad.com/a.png" alt="a &amp; b"><blockquote>quote</blockquote>',
+      '<p>Xin chào&nbsp;thế giới\u0000<br>dòng hai\u001f</p><img src="https://img.wattpad.com/a.png" alt="a &amp; b"><blockquote>quote</blockquote>',
       new Map([["https://img.wattpad.com/a.png", "images/img-1.png"]]),
     );
     const bytes = buildEpub({

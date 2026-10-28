@@ -61,6 +61,12 @@ export const layer = (outputDir: string) =>
         const text = yield* fileSystem
           .readFileString(logPath)
           .pipe(Effect.mapError(writeError("read")));
+        // A crash can leave a last line without its newline. Terminate it, or the next record is glued onto it and lost.
+        if (text.length > 0 && !text.endsWith("\n")) {
+          yield* fileSystem
+            .writeFileString(logPath, "\n", { flag: "a" })
+            .pipe(Effect.mapError(writeError("repair")));
+        }
         for (const line of text.split("\n")) {
           const entry = Option.getOrUndefined(decodeLine(line));
           if (entry !== undefined) loaded.set(entry.id, entry);

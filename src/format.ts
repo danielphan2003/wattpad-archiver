@@ -4,6 +4,10 @@ import type { LibraryStatus, Summary } from "./Archiver.ts";
 
 export const toJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
+/** Remote titles and messages reach a terminal; control characters could rewrite what it shows. */
+export const printable = (text: string) =>
+  text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/gu, " ");
+
 const formatBytes = (bytes: number) =>
   bytes < 1024 * 1024
     ? `${Math.round(bytes / 1024)} KiB`
@@ -24,9 +28,12 @@ export const summaryLines = (summary: Summary): ReadonlyArray<string> => {
   if (summary.failed.length > 0) parts.push(`${summary.failed.length} failed`);
   return [
     parts.join(", "),
-    ...summary.failed.map((failure) => `failed ${failure.id} ${failure.title}: ${failure.message}`),
+    ...summary.failed.map(
+      (failure) =>
+        `failed ${failure.id} ${printable(failure.title)}: ${printable(failure.message)}`,
+    ),
   ];
 };
 
 export const statusLine = (story: LibraryStatus) =>
-  `${story.state.padEnd(8)} ${story.id.padStart(10)} ${String(story.numParts).padStart(5)}  ${story.title}`;
+  `${story.state.padEnd(8)} ${story.id.padStart(10)} ${String(story.numParts).padStart(5)}  ${printable(story.title)}`;
