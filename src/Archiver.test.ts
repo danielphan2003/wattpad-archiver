@@ -20,6 +20,7 @@ const IMAGE_URL = "https://img.wattpad.com/inline.png";
 const makeFake = (...initial: ReadonlyArray<Story>) => {
   const stories = new Map(initial.map((story) => [story.id, story] as const));
   const failChapters = new Set<number>();
+  const failImages = new Set<string>();
   const failStories = new Map<string, WattpadAuthError | WattpadNotFoundError>();
   const calls = { library: 0, story: 0, chapter: 0 };
 
@@ -53,11 +54,15 @@ const makeFake = (...initial: ReadonlyArray<Story>) => {
         }
         return `<p>chapter ${part.id}</p><img src="${IMAGE_URL}">`;
       }),
-      image: () =>
-        Effect.succeed({ bytes: new Uint8Array([137, 80, 78, 71]), mediaType: "image/png" }),
+      image: Effect.fn("fake.image")(function* (url: string) {
+        if (failImages.has(url)) {
+          return yield* new WattpadRequestError({ operation: "image", status: 403 });
+        }
+        return { bytes: new Uint8Array([137, 80, 78, 71]), mediaType: "image/png" };
+      }),
     }),
   );
-  return { stories, failChapters, failStories, calls, layer };
+  return { stories, failChapters, failImages, failStories, calls, layer };
 };
 
 const OPTIONS: Archiver.Options = { force: false, storyConcurrency: 2, chapterConcurrency: 2 };
@@ -150,6 +155,17 @@ describe("Archiver", () => {
         fake.failChapters.clear();
         expect(yield* archive()).toMatchObject({ archived: 1, partial: 0, failedParts: 0 });
         expect(yield* archive()).toMatchObject({ archived: 0, skipped: 1 });
+      }),
+    );
+  });
+
+  it.effect("counts images it could not download instead of dropping them silently", () => {
+    const fake = makeFake(makeStory("1"));
+    fake.failImages.add(IMAGE_URL);
+    fake.failImages.add("https://img.wattpad.com/cover/cover.jpg");
+    return inArchive(fake, () =>
+      Effect.gen(function* () {
+        expect(yield* archive()).toMatchObject({ archived: 1, partial: 0, failedImages: 2 });
       }),
     );
   });

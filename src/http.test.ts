@@ -35,6 +35,26 @@ describe("Http", () => {
     }),
   );
 
+  it.effect("sends the token to other wattpad.com hosts only on the authenticated path", () =>
+    Effect.gen(function* () {
+      const seen: Array<HttpClientRequest.HttpClientRequest> = [];
+      yield* Effect.gen(function* () {
+        const http = yield* Http.make(OPTIONS);
+        yield* http.executeAuthenticated(HttpClientRequest.get("https://img.wattpad.com/a.jpg"));
+        yield* http.executeAuthenticated(
+          HttpClientRequest.get("https://wattpad.com.evil.example/a.jpg"),
+        );
+        yield* http.executeAuthenticated(HttpClientRequest.get("https://evil.example/a.jpg"));
+      }).pipe(run(() => new Response("ok"), seen));
+
+      expect(seen.map((request) => request.headers.cookie)).toEqual([
+        `token=${TEST_TOKEN}`,
+        undefined,
+        undefined,
+      ]);
+    }),
+  );
+
   it.effect("waits out a 429 and then succeeds", () =>
     Effect.gen(function* () {
       const seen: Array<HttpClientRequest.HttpClientRequest> = [];

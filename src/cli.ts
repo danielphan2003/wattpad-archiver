@@ -112,9 +112,9 @@ const archiveCommand = Command.make("archive", {
             ? Archiver.Event.$match(event, {
                 Planned: ({ pending, total }) =>
                   Console.error(`${pending} of ${total} stories to archive`),
-                StoryArchived: ({ title, parts, failedParts }) =>
+                StoryArchived: ({ title, parts, failedParts, failedImages }) =>
                   Console.error(
-                    `archived ${title} (${parts} chapters${failedParts > 0 ? `, ${failedParts} missing` : ""})`,
+                    `archived ${title} (${parts} chapters${failedParts > 0 ? `, ${failedParts} missing` : ""}${failedImages > 0 ? `, ${failedImages} images missing` : ""})`,
                   ),
                 StoryFailed: ({ title, message }) => Console.error(`failed ${title}: ${message}`),
               })

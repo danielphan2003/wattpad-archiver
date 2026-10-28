@@ -16,6 +16,7 @@ const summary: Archiver.Summary = {
   failed: [],
   partial: 0,
   failedParts: 0,
+  failedImages: 0,
   bytes: 0,
 };
 

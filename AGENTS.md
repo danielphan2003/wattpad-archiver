@@ -21,7 +21,7 @@ Node 24 with Effect v4.
 
 ## Rules
 
-- The token is a secret. Never log it, print it, accept it as a flag or tool argument, or send it to a host other than `www.wattpad.com`.
+- The token is a secret. Never log it, print it, or accept it as a flag or tool argument. It goes to `www.wattpad.com`, and to another `wattpad.com` host only as a retry after a 401 or 403. Never send it outside `wattpad.com`.
 - MCP tools never take paths or credentials. Those come from the server's launch configuration.
 - Nothing writes to stdout in `mcp` mode except the protocol. The default logger is replaced there.
 - Output is quiet by default. Add logging only when it helps someone act.

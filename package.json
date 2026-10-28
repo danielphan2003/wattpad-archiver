@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "^4.0.6",
+    "@likecoin/epubcheck-ts": "0.7.0",
     "@oxlint/plugins": "^1.90.0",
     "@types/node": "^26.6.5",
     "typescript": "npm:@tsc-rs/typescript@0.8.0",

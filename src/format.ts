@@ -19,6 +19,8 @@ export const summaryLines = (summary: Summary): ReadonlyArray<string> => {
   if (summary.partial > 0) {
     parts.push(`${summary.partial} missing ${summary.failedParts} chapters, retried next run`);
   }
+  if (summary.failedImages > 0)
+    parts.push(`${summary.failedImages} images could not be downloaded`);
   if (summary.failed.length > 0) parts.push(`${summary.failed.length} failed`);
   return [
     parts.join(", "),

@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import { HttpClient, type HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import * as Credentials from "./Credentials.ts";
 import * as Http from "./http.ts";
@@ -38,6 +38,11 @@ export const fakeHttp = (handler: Handler, seen: Array<HttpClientRequest.HttpCli
     execute: (request) => {
       seen.push(request);
       return respond(handler)(request);
+    },
+    executeAuthenticated: (request) => {
+      const withToken = HttpClientRequest.setHeader(request, "cookie", `token=${TEST_TOKEN}`);
+      seen.push(withToken);
+      return respond(handler)(withToken);
     },
   });
 

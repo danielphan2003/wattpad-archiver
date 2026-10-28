@@ -1,8 +1,10 @@
+import { EpubCheck } from "@likecoin/epubcheck-ts";
 import { describe, expect, it } from "@effect/vitest";
 import { strFromU8, unzipSync } from "fflate";
 
 import { buildEpub, type EpubInput } from "./epub.ts";
 import { makePart, makeStory } from "./fixtures.testkit.ts";
+import { toXhtml } from "./html.ts";
 
 const png = (path: string) => ({
   path,
@@ -82,6 +84,39 @@ describe("buildEpub", () => {
       buildEpub(input({ story, chapters: [{ part: makePart(1), body: "<p>x</p>" }] })),
     );
     expect(files["OEBPS/content.opf"]).toContain(`<dc:language>${code}</dc:language>`);
+  });
+
+  it("passes EPUBCheck without errors or warnings, with images, a dedication, and a missing chapter", async () => {
+    const story = makeStory("5", {
+      title: 'A & B <"C">',
+      language: { id: 19, name: "Tiếng Việt" },
+      parts: [
+        makePart(51, { dedication: { name: "Ada", url: "https://www.wattpad.com/user/ada" } }),
+        makePart(52),
+        makePart(53),
+      ],
+    });
+    const body = toXhtml(
+      '<p>Xin chào&nbsp;thế giới<br>dòng hai</p><img src="https://img.wattpad.com/a.png" alt="a &amp; b"><blockquote>quote</blockquote>',
+      new Map([["https://img.wattpad.com/a.png", "images/img-1.png"]]),
+    );
+    const bytes = buildEpub({
+      story,
+      chapters: [
+        { part: story.parts[0]!, body, photoPath: "images/img-1.png" },
+        { part: story.parts[1]!, body: undefined },
+        { part: story.parts[2]!, body: "" },
+      ],
+      cover: png("images/cover.png"),
+      images: [png("images/img-1.png")],
+    });
+
+    const result = await EpubCheck.validate(bytes);
+    const problems = result.messages
+      .filter((message) => ["fatal", "error", "warning"].includes(message.severity))
+      .map((message) => `${message.severity} ${message.id}: ${message.message}`);
+
+    expect(problems).toEqual([]);
   });
 
   it("produces identical bytes for identical input", () => {

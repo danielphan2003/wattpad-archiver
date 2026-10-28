@@ -33,6 +33,7 @@ export type Event = Data.TaggedEnum<{
     readonly title: string;
     readonly parts: number;
     readonly failedParts: number;
+    readonly failedImages: number;
     readonly bytes: number;
   };
   StoryFailed: { readonly id: string; readonly title: string; readonly message: string };
@@ -51,6 +52,8 @@ export interface Summary {
   /** Stories archived with at least one chapter missing; the next run retries them. */
   readonly partial: number;
   readonly failedParts: number;
+  /** Images, covers included, that could not be downloaded. They are left out, not retried. */
+  readonly failedImages: number;
   readonly bytes: number;
 }
 
@@ -246,10 +249,11 @@ export const layer = Layer.effect(
         };
       });
       const failedParts = chapters.filter((chapter) => chapter.body === undefined).length;
-
       const coverExtension = Option.isSome(cover)
         ? imageExtension(cover.value.mediaType)
         : undefined;
+      const coverMissing = isWattpadImageUrl(story.cover) && coverExtension === undefined;
+      const failedImages = imageUrls.size - images.size + (coverMissing ? 1 : 0);
       const bytes = buildEpub({
         story,
         chapters,
@@ -278,7 +282,7 @@ export const layer = Layer.effect(
         failedParts,
         archivedAt: DateTime.formatIso(yield* DateTime.now),
       });
-      return { parts: parts.length, failedParts, bytes: bytes.length };
+      return { parts: parts.length, failedParts, failedImages, bytes: bytes.length };
     });
 
     const archive = Effect.fn("Archiver.archive")(function* (
@@ -348,6 +352,7 @@ export const layer = Layer.effect(
           .map(({ id, title, message }) => ({ id, title, message })),
         partial: archived.filter((result) => result.failedParts > 0).length,
         failedParts: archived.reduce((sum, result) => sum + result.failedParts, 0),
+        failedImages: archived.reduce((sum, result) => sum + result.failedImages, 0),
         bytes: archived.reduce((sum, result) => sum + result.bytes, 0),
       } satisfies Summary;
     });

@@ -70,6 +70,7 @@ export const ArchiveTool = Tool.make("wattpad_archive", {
     skipped: Schema.Int,
     partial: Schema.Int,
     failedParts: Schema.Int,
+    failedImages: Schema.Int,
     bytes: Schema.Int,
     failed: Schema.Array(
       Schema.Struct({ id: Schema.String, title: Schema.String, message: Schema.String }),

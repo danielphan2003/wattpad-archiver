@@ -64,10 +64,14 @@ export const layer = Layer.effect(
     const http = yield* Http.Service;
     const { username } = yield* Credentials.Service;
 
-    const send = (operation: string, request: HttpClientRequest.HttpClientRequest) =>
-      http
-        .execute(request)
-        .pipe(Effect.mapError((cause) => new WattpadResponseError({ operation, cause })));
+    const send = (
+      operation: string,
+      request: HttpClientRequest.HttpClientRequest,
+      authenticated = false,
+    ) =>
+      (authenticated ? http.executeAuthenticated : http.execute)(request).pipe(
+        Effect.mapError((cause) => new WattpadResponseError({ operation, cause })),
+      );
 
     const readText = (operation: string, response: HttpClientResponse.HttpClientResponse) =>
       response.text.pipe(
@@ -143,7 +147,11 @@ export const layer = Layer.effect(
     });
 
     const fetchImage = Effect.fn("Wattpad.fetchImage")(function* (url: string) {
-      const response = yield* send("image", HttpClientRequest.get(url));
+      const request = HttpClientRequest.get(url);
+      const open = yield* send("image", request);
+      // Public images need no token. A host that wants one says so, and only then does it get the token.
+      const response =
+        open.status === 401 || open.status === 403 ? yield* send("image", request, true) : open;
       if (response.status >= 400) {
         return yield* new WattpadRequestError({ operation: "image", status: response.status });
       }

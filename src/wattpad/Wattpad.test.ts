@@ -124,6 +124,33 @@ describe("Wattpad failures", () => {
 });
 
 describe("Wattpad.image", () => {
+  it.effect("asks for the token only when the image host refuses without it", () =>
+    Effect.gen(function* () {
+      const seen: Array<HttpClientRequest.HttpClientRequest> = [];
+      yield* Effect.gen(function* () {
+        const wattpad = yield* Wattpad.Service;
+        yield* wattpad.image("https://img.wattpad.com/public.png");
+        yield* wattpad.image("https://img.wattpad.com/private.png");
+      }).pipe(
+        provide((request) => {
+          const needsToken =
+            request.url.endsWith("private.png") && request.headers.cookie === undefined;
+          return needsToken
+            ? new Response("forbidden", { status: 403 })
+            : new Response(new Uint8Array([1]), { headers: { "content-type": "image/png" } });
+        }, seen),
+      );
+
+      expect(
+        seen.map((request) => [request.url.split("/").pop(), request.headers.cookie === undefined]),
+      ).toEqual([
+        ["public.png", true],
+        ["private.png", true],
+        ["private.png", false],
+      ]);
+    }),
+  );
+
   it.effect("shares one download between concurrent callers and does not cache a failure", () =>
     Effect.gen(function* () {
       const seen: Array<HttpClientRequest.HttpClientRequest> = [];

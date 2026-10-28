@@ -33,6 +33,9 @@ importers:
       '@effect/vitest':
         specifier: ^4.0.6
         version: 4.0.6(effect@4.0.6)(vitest@5.0.5)
+      '@likecoin/epubcheck-ts':
+        specifier: 0.7.0
+        version: 0.7.0
       '@oxlint/plugins':
         specifier: ^1.90.0
         version: 1.90.0
@@ -91,6 +94,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@likecoin/epubcheck-ts@0.7.0':
+    resolution: {integrity: sha512-i1c9Eqa6ioJQ3ahOaKTKDsOuTqdsHkpjuXKJD3RmjSMsUpuq+lgmtGhQoKueuE8v0mGpRDbXTvUYcHgSuRXsCw==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   '@oxc-project/runtime@0.155.0':
     resolution: {integrity: sha512-VbW9raczGS5ZZ1FMunUBYHe4uV/R684qlQCoMdE3n5JT1PcqQsvmFpMYkF8AD+W04fBLGAq6Tr7YsTk0jjvDBA==}
@@ -739,6 +747,10 @@ packages:
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
+  css-tree@3.2.1:
+    resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}
+    engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0}
+
   dequal@2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
     engines: {node: '>=6'}
@@ -809,6 +821,10 @@ packages:
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  libxml2-wasm@0.6.0:
+    resolution: {integrity: sha512-CQ6bJT10o49FkL6O/zLYNf4DAm2eE6LH+ELMLf1z9842CXjgWejfOc5Fu/Yn/d6EnqTPrJbuB4i3D0MaYJ92Og==}
+    engines: {node: '>=18'}
 
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
@@ -890,6 +906,9 @@ packages:
 
   magic-string@1.4.5:
     resolution: {integrity: sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w==}
+
+  mdn-data@2.27.1:
+    resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
 
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
@@ -1136,6 +1155,12 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@likecoin/epubcheck-ts@0.7.0':
+    dependencies:
+      css-tree: 3.2.1
+      fflate: 0.8.3
+      libxml2-wasm: 0.6.0
 
   '@oxc-project/runtime@0.155.0': {}
 
@@ -1522,6 +1547,11 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
+  css-tree@3.2.1:
+    dependencies:
+      mdn-data: 2.27.1
+      source-map-js: 1.2.2
+
   dequal@2.0.3: {}
 
   detect-libc@2.1.2: {}
@@ -1578,6 +1608,8 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
+  libxml2-wasm@0.6.0: {}
+
   lightningcss-android-arm64@1.33.0:
     optional: true
 
@@ -1632,6 +1664,8 @@ snapshots:
   magic-string@1.4.5:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  mdn-data@2.27.1: {}
 
   mrmime@2.0.1: {}
 

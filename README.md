@@ -24,8 +24,10 @@ Wattpad has no public API, so the tool uses the session cookie of a logged-in br
 3. Copy the value of `token`. It is an `HttpOnly` cookie, so only the developer tools can show it.
 4. Save it to a file readable only by you (`chmod 600`).
 
-The token is a session credential. It is never accepted as a flag or an MCP tool argument, never
-printed, and only ever sent to `www.wattpad.com`, not to the image hosts.
+The token is a session credential. It is never accepted as a flag or an MCP tool argument and never
+printed. It is sent to `www.wattpad.com`. Image hosts such as `img.wattpad.com` get requests without it, since
+public images need none; only if one answers 401 or 403 is the request repeated with the token, and only to a
+`wattpad.com` host. Hosts outside `wattpad.com` never see it, and images from them are not downloaded.
 
 | Setting          | Flag           | Environment                                    |
 | ---------------- | -------------- | ---------------------------------------------- |
@@ -42,7 +44,7 @@ wattpad-archiver archive                   # everything that is new or changed
 wattpad-archiver archive --story 398322420 # one story, without walking the library
 ```
 
-`archive` prints one summary line and nothing else. `--verbose` adds a line per story, `--json` prints the
+`archive` prints one summary line and nothing else, and mentions any images it could not download. `--verbose` adds a line per story, `--json` prints the
 summary as JSON. It exits non-zero when a story fails.
 
 A full first run is about one request per chapter plus the images, so tens of thousands for a large library.
@@ -89,6 +91,10 @@ pnpm check       # format, lint, typecheck, test
 pnpm typecheck   # tsc-rs, the Rust TypeScript compiler, with the Effect diagnostics
 pnpm test
 ```
+
+The test suite validates generated EPUBs with [`@likecoin/epubcheck-ts`](https://github.com/likecoin/epubcheck-ts),
+a TypeScript port of EPUBCheck. It is pinned and used in tests only, never shipped. For the reference result, run
+the official [EPUBCheck](https://github.com/w3c/epubcheck) jar on an archived book.
 
 Tooling follows [T3 Code](https://github.com/pingdotgg/t3code): Vite+ for format, lint, test, and the build,
 Effect v4 throughout, and the `oxlint-plugin-t3code` rules vendored in `oxlint-plugin-t3code/`.
