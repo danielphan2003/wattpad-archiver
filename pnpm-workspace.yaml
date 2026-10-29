@@ -1,0 +1,2 @@
+allowBuilds:
+  "@tsc-rs/typescript": true
