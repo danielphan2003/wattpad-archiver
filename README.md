@@ -22,18 +22,28 @@ Wattpad has no public API, so the tool uses the session cookie of a logged-in br
 1. Log in to wattpad.com.
 2. Open the browser's developer tools, then **Application**, **Cookies**, `https://www.wattpad.com`.
 3. Copy the value of `token`. It is an `HttpOnly` cookie, so only the developer tools can show it.
-4. Save it to a file readable only by you (`chmod 600`).
+4. Save it where only you can read it. Pipe it to `login`, which keeps the account and token in
+   `~/.config/wattpad-archiver` (`$XDG_CONFIG_HOME/wattpad-archiver` when set) with mode 0600:
+
+   ```sh
+   wl-paste | wattpad-archiver login --username your-username   # or pbpaste, xclip -o, ...
+   ```
+
+   Later runs read them from there, so no flags or environment are needed. A token file that other accounts can
+   read is refused.
 
 The token is a session credential. It is never accepted as a flag or an MCP tool argument and never
 printed. It is sent to `www.wattpad.com`. Image hosts such as `img.wattpad.com` get requests without it, since
 public images need none; only if one answers 401 or 403 is the request repeated with the token, and only to a
 `wattpad.com` host. Hosts outside `wattpad.com` never see it, and images from them are not downloaded.
 
-| Setting          | Flag           | Environment                                    |
-| ---------------- | -------------- | ---------------------------------------------- |
-| Account          | `--username`   | `WATTPAD_USERNAME`                             |
-| Token            | `--token-file` | `WATTPAD_TOKEN_FILE`, or `WATTPAD_TOKEN`       |
-| Output directory | `--output`     | `WATTPAD_OUTPUT` (default `./wattpad-archive`) |
+| Setting          | Flag           | Environment                                    | Config directory |
+| ---------------- | -------------- | ---------------------------------------------- | ---------------- |
+| Account          | `--username`   | `WATTPAD_USERNAME`                             | `username`       |
+| Token            | `--token-file` | `WATTPAD_TOKEN_FILE`, or `WATTPAD_TOKEN`       | `token`          |
+| Output directory | `--output`     | `WATTPAD_OUTPUT` (default `./wattpad-archive`) |                  |
+
+A flag wins over the environment, and the environment wins over the config directory.
 
 ## Use
 
@@ -68,7 +78,7 @@ wattpad-archiver mcp
 ```
 
 Serves two tools over stdio: `wattpad_library` (list stories and their archive state, read-only) and
-`wattpad_archive` (archive stories). Credentials, the output directory, and pacing come from the server's
+`wattpad_archive` (archive stories). Credentials come from the config directory (or the environment), and the output directory and pacing from the server's
 environment, so a prompt cannot redirect files or reach the token. An archive call with no `storyIds` is capped at
 10 stories by default and 500 at most.
 
@@ -79,8 +89,6 @@ environment, so a prompt cannot redirect files or reach the token. An archive ca
       "command": "node",
       "args": ["/path/to/wattpad-archiver/dist/bin.mjs", "mcp"],
       "env": {
-        "WATTPAD_USERNAME": "your-username",
-        "WATTPAD_TOKEN_FILE": "/path/to/token",
         "WATTPAD_OUTPUT": "/path/to/archive"
       }
     }

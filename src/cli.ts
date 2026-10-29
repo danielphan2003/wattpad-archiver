@@ -4,11 +4,16 @@ import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
+import * as Stdio from "effect/Stdio";
+import * as Stream from "effect/Stream";
 import { Command, Flag } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
 import * as Archiver from "./Archiver.ts";
+import { CredentialsError } from "./errors.ts";
+import * as Credentials from "./Credentials.ts";
 import { printable, statusLine, summaryLines, toJson } from "./format.ts";
 import { DEFAULT_REQUESTS_PER_SECOND } from "./http.ts";
 import * as Mcp from "./mcp.ts";
@@ -24,12 +29,14 @@ const between = (minimum: number, maximum: number) =>
 const sharedFlags = {
   username: Flag.String("username").pipe(
     Flag.withAlias("u"),
-    Flag.withDescription("Wattpad account to archive. Falls back to WATTPAD_USERNAME."),
+    Flag.withDescription(
+      "Wattpad account to archive. Falls back to WATTPAD_USERNAME, then the config directory.",
+    ),
     Flag.optional,
   ),
   tokenFile: Flag.String("token-file").pipe(
     Flag.withDescription(
-      "File holding the `token` cookie of a logged-in session. Falls back to WATTPAD_TOKEN_FILE, then WATTPAD_TOKEN.",
+      "File holding the `token` cookie of a logged-in session. Falls back to WATTPAD_TOKEN_FILE, then WATTPAD_TOKEN, then the config directory.",
     ),
     Flag.optional,
   ),
@@ -167,6 +174,47 @@ const listCommand = Command.make("list", {
   ),
 );
 
+const loginCommand = Command.make("login", {
+  username: Flag.String("username").pipe(
+    Flag.withAlias("u"),
+    Flag.withDescription("Wattpad account to remember."),
+  ),
+  tokenFile: Flag.String("token-file").pipe(
+    Flag.withDescription("Read the token from this file instead of standard input."),
+    Flag.optional,
+  ),
+}).pipe(
+  Command.withDescription(
+    "Remember the account and `token` cookie in the config directory (~/.config/wattpad-archiver), readable by you only. Pipe the token in on standard input.",
+  ),
+  Command.withHandler((flags) =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const stdio = yield* Stdio.Stdio;
+      const unreadable = () => new CredentialsError({ reason: "Could not read the token." });
+      let token: string;
+      if (flags.tokenFile._tag === "Some") {
+        token = yield* fileSystem
+          .readFileString(flags.tokenFile.value)
+          .pipe(Effect.mapError(unreadable));
+      } else if (yield* stdio.stdinIsTerminal) {
+        return yield* new CredentialsError({
+          reason:
+            "Pipe the token in on standard input, or pass --token-file. It is never taken as a flag.",
+        });
+      } else {
+        token = yield* stdio.stdin.pipe(
+          Stream.decodeText(),
+          Stream.mkString,
+          Effect.mapError(unreadable),
+        );
+      }
+      const directory = yield* Credentials.store({ username: flags.username, token });
+      yield* Console.error(`Saved the account and token in ${directory}.`);
+    }).pipe(Effect.mapError(userError)),
+  ),
+);
+
 const mcpCommand = Command.make("mcp", sharedFlags).pipe(
   Command.withDescription(
     "Serve the archiver to an MCP client over stdio. The token, account, and output directory come from this command's flags and environment, not from tool calls.",
@@ -184,7 +232,7 @@ const mcpCommand = Command.make("mcp", sharedFlags).pipe(
 
 export const cli = Command.make("wattpad-archiver").pipe(
   Command.withDescription("Archive a Wattpad library as EPUBs, from the command line or over MCP."),
-  Command.withSubcommands([archiveCommand, listCommand, mcpCommand]),
+  Command.withSubcommands([archiveCommand, listCommand, loginCommand, mcpCommand]),
 );
 
 export const runCli = () =>
