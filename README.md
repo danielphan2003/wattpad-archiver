@@ -104,8 +104,11 @@ pnpm typecheck   # tsc-rs, the Rust TypeScript compiler, with the Effect diagnos
 pnpm test
 ```
 
-The test suite validates generated EPUBs with [`@likecoin/epubcheck-ts`](https://github.com/likecoin/epubcheck-ts),
-a TypeScript port of EPUBCheck. It is pinned and used in tests only, never shipped. For the reference result, run
+The test suite validates generated EPUBs with [`epubcheck-ts`](https://github.com/danielphan2003/epubcheck-ts),
+a TypeScript rewrite of EPUBCheck that passes 1250 of upstream's 1251 scenarios. It is installed from its v0.1.0
+release tarball (pinned by integrity hash in the lockfile) and used in tests only, never shipped. It pins `effect`,
+`@effect/platform-node`, and `@effect/platform-node-shared` to 4.0.7, so this package pins the same versions to keep
+one copy of Effect. For the reference result, run
 the official [EPUBCheck](https://github.com/w3c/epubcheck) jar on an archived book.
 
 Tooling follows [T3 Code](https://github.com/pingdotgg/t3code): Vite+ for format, lint, test, and the build,
